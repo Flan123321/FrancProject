@@ -57,34 +57,64 @@ export const useProjectStore = defineStore('project', () => {
 
     // --- NUEVA FUNCIÓN: Subir Archivo Real ---
     const uploadReport = async (project, file) => {
-        // 1. Subir archivo al bucket 'reports'
-        // Nombre único: ID_PROYECTO + timestamp + nombre_archivo
-        const fileName = `${project.id}_${Date.now()}_${file.name}`
+        // 1. Sanitizar nombre del archivo (Solo a-z, 0-9, y extensión)
+        // Evita errores con acentos, espacios, ñ, etc.
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${project.id}_${Date.now()}.${fileExt}`;
 
         const { data, error: uploadError } = await supabase.storage
             .from('reports')
-            .upload(fileName, file)
+            .upload(fileName, file);
 
-        if (uploadError) throw uploadError
+        if (uploadError) throw uploadError;
 
         // 2. Obtener URL pública
         const { data: { publicUrl } } = supabase.storage
             .from('reports')
-            .getPublicUrl(fileName)
+            .getPublicUrl(fileName);
 
-        // 3. Actualizar proyecto en BD con el link y estado Completado
-        const { error: dbError } = await supabase
+        // 3. Actualizar proyecto y traer el email del dueño
+        const { data: updatedProject, error: dbError } = await supabase
             .from('projects')
             .update({
                 report_url: publicUrl,
                 status: 'Completado'
             })
             .eq('id', project.id)
+            .select('*, profiles(email)')
+            .single();
 
-        if (dbError) throw dbError
+        if (dbError) throw dbError;
 
-        // 4. Actualizar estado local
-        await fetchProjects()
+        // 4. Enviar Email (Resend)
+        if (updatedProject?.profiles?.email) {
+            await sendCompletionEmail(updatedProject.profiles.email, project.name, publicUrl);
+        }
+
+        // 5. Actualizar estado local
+        await fetchProjects();
+    };
+
+    // --- EMAIL FUNCTION (Vía Supabase Edge Function) ---
+    const sendCompletionEmail = async (toEmail, projectName, reportUrl) => {
+        try {
+            console.log('Invocando Edge Function para email...')
+            const { data, error } = await supabase.functions.invoke('send-email', {
+                body: {
+                    to: toEmail,
+                    subject: `✅ Proyecto Completado: ${projectName}`,
+                    html: `
+            <p>El proyecto <strong>${projectName}</strong> ha sido completado.</p>
+            <a href="${reportUrl}" style="padding: 10px 20px; background-color: #2563EB; color: white; text-decoration: none; border-radius: 5px;">Descargar Reporte</a>
+          `
+                }
+            })
+
+            if (error) throw error
+            console.log('Email enviado con éxito:', data)
+        } catch (e) {
+            console.error('Error enviando email:', e)
+        }
     }
 
     return {
