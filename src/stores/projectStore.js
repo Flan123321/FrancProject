@@ -37,13 +37,48 @@ export const useProjectStore = defineStore('project', () => {
 
     const createProject = async (projectData) => {
         const { data: { user } } = await supabase.auth.getUser()
+
+        // 1. Obtener la organización del usuario (Contexto actual)
+        // Por ahora asumimos que el usuario opera en su primera organización encontrada
+        // TODO: En el futuro, esto debería venir de un selector de organización en la UI
+        const { data: orgMember, error: orgError } = await supabase
+            .from('organization_members')
+            .select('organization_id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .single()
+
+        if (orgError || !orgMember) {
+            console.error('Error: Usuario no pertenece a ninguna organización', orgError)
+            throw new Error('Debes pertenecer a una organización para crear proyectos.')
+        }
+
+        const organizationId = orgMember.organization_id
+
+        console.log(`Creando proyecto para organización: ${organizationId}`)
+
+        // 2. Insertar Proyecto con organization_id explícito
         const { error } = await supabase.from('projects').insert([{
-            user_id: user.id,
+            organization_id: organizationId, // OBLIGATORIO por esquema
             name: projectData.name,
             description: projectData.description,
             model_url: projectData.modelUrl
         }])
-        if (error) throw error
+
+        // 3. Manejo de Errores RLS y Base de Datos
+        if (error) {
+            console.error('Error al crear proyecto en Supabase:', error)
+
+            // Check specific RLS or Permission errors (Postgres codes usually 42501 for permission denied)
+            // Supabase returns { code, message, details, hint }
+            if (error.code === '42501' || error.code === 'PGRST301') {
+                console.error('BLOQUEO RLS: No tienes permisos para crear proyectos en esta organización.')
+                throw new Error('No tienes permisos para crear proyectos en esta organización (RLS).')
+            }
+
+            throw error
+        }
+
         await fetchProjects()
     }
 
@@ -57,21 +92,31 @@ export const useProjectStore = defineStore('project', () => {
 
     // --- NUEVA FUNCIÓN: Subir Archivo Real ---
     const uploadReport = async (project, file) => {
-        // 1. Sanitizar nombre del archivo (Solo a-z, 0-9, y extensión)
-        // Evita errores con acentos, espacios, ñ, etc.
+        // Valida que exista org_id
+        if (!project.organization_id) {
+            throw new Error("Error crítico: El proyecto no tiene organization_id asociado.");
+        }
+
+        // 1. Sanitizar nombre del archivo
         const fileExt = file.name.split('.').pop();
-        const fileName = `${project.id}_${Date.now()}.${fileExt}`;
+        // Limpiamos el nombre original de caracteres especiales para evitar problemas en URL/Storage
+        const sanitizedOriginalName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+
+        // Estructura Estricta: organization_id/project_id/filename
+        const filePath = `${project.organization_id}/${project.id}/${sanitizedOriginalName}`;
 
         const { data, error: uploadError } = await supabase.storage
             .from('reports')
-            .upload(fileName, file);
+            .upload(filePath, file, {
+                upsert: true // Permitir sobrescribir si es el mismo archivo
+            });
 
         if (uploadError) throw uploadError;
 
         // 2. Obtener URL pública
         const { data: { publicUrl } } = supabase.storage
             .from('reports')
-            .getPublicUrl(fileName);
+            .getPublicUrl(filePath);
 
         // 3. Actualizar proyecto y traer el email del dueño
         const { data: updatedProject, error: dbError } = await supabase
@@ -117,6 +162,74 @@ export const useProjectStore = defineStore('project', () => {
         }
     }
 
+    // --- SECURITY VERIFICATION TOOL ---
+    const testSecurity = async () => {
+        // 1. Create Dummy Project
+        const timestamp = new Date().toISOString();
+        const dummyName = `Security Test ${timestamp}`;
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // Need org_id. Assuming the user has at least one org or using a default. 
+        // For now, let's try to get the first org from members
+        const { data: orgData } = await supabase
+            .from('organization_members')
+            .select('organization_id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .single();
+
+        if (!orgData) throw new Error("User needs to belong to an organization to run this test.");
+
+        console.log("Creating dummy project for security test...");
+        const { data: project, error: createError } = await supabase
+            .from('projects')
+            .insert([{
+                organization_id: orgData.organization_id, // Mandatory now
+                name: dummyName,
+                description: "Temporary project for security verification",
+                model_url: "https://example.com/dummy",
+                status: "Pendiente"
+            }])
+            .select()
+            .single();
+
+        if (createError) throw createError;
+        console.log("Project created:", project.id);
+
+        // 2. Query Audit Log IMMEDIATELY
+        console.log("Querying audit logs...");
+        // Wait a tiny bit just in case propagation is involved, though trigger should be immediate in same tx context usually, 
+        // but here we are making separate API calls. RLS might be tricky.
+
+        const { data: logs, error: logError } = await supabase
+            .from('audit_logs')
+            .select('*')
+            .eq('target_id', project.id)
+            .eq('action', 'INSERT')
+            .limit(1);
+
+        if (logError) {
+            console.error("Audit Log Error:", logError);
+            return { success: false, message: "Error Accessing Logs: " + logError.message, project };
+        }
+
+        if (logs && logs.length > 0) {
+            return {
+                success: true,
+                message: "Audit Log Verified!",
+                log: logs[0],
+                project
+            };
+        } else {
+            return {
+                success: false,
+                message: "No Audit Log returned. (RLS might be hiding it OR Trigger failed)",
+                project
+            };
+        }
+    }
+
     return {
         projects,
         loading,
@@ -125,6 +238,7 @@ export const useProjectStore = defineStore('project', () => {
         fetchProjects,
         createProject,
         updateProjectStatus,
-        uploadReport
+        uploadReport,
+        testSecurity
     }
 })

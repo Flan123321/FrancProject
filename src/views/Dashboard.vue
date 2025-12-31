@@ -17,12 +17,22 @@
       
       <div class="flex justify-between items-center mb-6">
         <h2 class="text-2xl font-bold text-gray-700">Proyectos</h2>
-        <router-link 
-          to="/new-project" 
-          class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition flex items-center gap-2"
-        >
-          + Nuevo Proyecto
-        </router-link>
+        <div class="flex gap-2">
+           <button 
+            @click="handleSecurityTest"
+            class="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700 transition flex items-center gap-2"
+            :disabled="testLoading"
+          >
+            <span v-if="testLoading">Testing...</span>
+            <span v-else>🛡️ Test Seguridad</span>
+          </button>
+          <router-link 
+            to="/new-project" 
+            class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            + Nuevo Proyecto
+          </router-link>
+        </div>
       </div>
 
       <div v-if="store.loading" class="text-center py-10 text-gray-500">
@@ -79,14 +89,8 @@
                     <option value="Completado">Completado</option>
                   </select>
                   
-                  <!-- Upload Button triggers hidden input -->
-                  <button 
-                    @click="triggerUpload(project)"
-                    class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 flex items-center gap-1"
-                    :disabled="uploadingId === project.id"
-                  >
-                    {{ uploadingId === project.id ? 'Subiendo...' : '📤 Subir Reporte' }}
-                  </button>
+                  <!-- New File Uploader Component -->
+                  <FileUploader :project="project" />
                 </div>
 
               </div>
@@ -94,15 +98,6 @@
           </li>
         </ul>
       </div>
-      
-      <!-- Input oculto para subir archivos -->
-      <input 
-        type="file" 
-        ref="fileInput" 
-        class="hidden" 
-        accept=".pdf,.bcf,.zip"
-        @change="handleFileChange"
-      />
 
     </main>
   </div>
@@ -113,12 +108,11 @@ import { onMounted, ref } from 'vue'
 import { useProjectStore } from '../stores/projectStore'
 import { supabase } from '../supabaseClient'
 import { useRouter } from 'vue-router'
+import FileUploader from '../components/FileUploader.vue'
 
 const store = useProjectStore()
 const router = useRouter()
-const fileInput = ref(null)
-const selectedProject = ref(null)
-const uploadingId = ref(null)
+const testLoading = ref(false)
 
 onMounted(() => {
   store.fetchProjects()
@@ -129,24 +123,21 @@ const handleLogout = async () => {
   router.push('/')
 }
 
-const triggerUpload = (project) => {
-  selectedProject.value = project
-  fileInput.value.click() // Simula clic en el input oculto
-}
-
-const handleFileChange = async (event) => {
-  const file = event.target.files[0]
-  if (!file || !selectedProject.value) return
-
+const handleSecurityTest = async () => {
+  if (!confirm("Esto creará un proyecto de prueba y verificará los logs de auditoría. ¿Continuar?")) return;
+  
+  testLoading.value = true;
   try {
-    uploadingId.value = selectedProject.value.id
-    await store.uploadReport(selectedProject.value, file)
-    alert('Reporte subido y proyecto completado.')
-  } catch (error) {
-    alert('Error al subir: ' + error.message)
+    const result = await store.testSecurity();
+    if (result.success) {
+      alert(`✅ ÉXITO: Log de Auditoría Encontrado.\n\nID Proyecto: ${result.project.id}\nAcción: ${result.log.action}\nTabla: ${result.log.target_table}\nUser: ${result.log.user_id}`);
+    } else {
+      alert(`❌ FALLO: ${result.message}`);
+    }
+  } catch (e) {
+    alert(`❌ ERROR CRÍTICO: ${e.message}`);
   } finally {
-    uploadingId.value = null
-    event.target.value = '' // Limpiar input
+    testLoading.value = false;
   }
 }
 </script>
