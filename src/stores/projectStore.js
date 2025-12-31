@@ -172,14 +172,23 @@ export const useProjectStore = defineStore('project', () => {
 
         // Need org_id. Assuming the user has at least one org or using a default. 
         // For now, let's try to get the first org from members
-        const { data: orgData } = await supabase
+        const { data: orgData, error: orgError } = await supabase
             .from('organization_members')
-            .select('organization_id')
+            .select('organization_id, role')
             .eq('user_id', user.id)
             .limit(1)
             .single();
 
-        if (!orgData) throw new Error("User needs to belong to an organization to run this test.");
+        if (orgError || !orgData) {
+            console.error("Org Member Error:", orgError);
+            throw new Error("Unable to retrieve organization membership. ensure you are part of an organization.");
+        }
+
+        console.log("Found Organization:", orgData.organization_id, "Role:", orgData.role);
+
+        if (orgData.role !== 'admin' && orgData.role !== 'member') {
+            return { success: false, message: `Your role '${orgData.role}' does not have permission to create projects.` };
+        }
 
         console.log("Creating dummy project for security test...");
         const { data: project, error: createError } = await supabase
@@ -194,7 +203,13 @@ export const useProjectStore = defineStore('project', () => {
             .select()
             .single();
 
-        if (createError) throw createError;
+        if (createError) {
+            // Check for RLS specifically
+            if (createError.code === '42501') {
+                return { success: false, message: `RLS Error: Permission denied. Role '${orgData.role}' might be insufficient or policy mismatch.` };
+            }
+            throw createError;
+        }
         console.log("Project created:", project.id);
 
         // 2. Query Audit Log IMMEDIATELY
