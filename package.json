@@ -10,9 +10,15 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "@vueuse/motion": "^3.0.3",
+    "apexcharts": "^5.3.6",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.562.0",
     "pinia": "^2.1.7",
+    "tailwind-merge": "^3.4.0",
     "vue": "^3.3.11",
-    "vue-router": "^4.2.5"
+    "vue-router": "^4.2.5",
+    "vue3-apexcharts": "^1.10.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.5.2",

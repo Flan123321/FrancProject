@@ -1,8 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles specific to BIM Audit Hub if needed */
-body {
-  @apply bg-gray-50 text-gray-900;
+@layer base {
+  body {
+    @apply bg-verum-navy text-slate-200 font-sans antialiased;
+  }
 }
+
+
+/* Custom styles specific to BIM Audit Hub if needed */

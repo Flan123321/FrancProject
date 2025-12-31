@@ -1,143 +1,76 @@
+<script setup>
+import { Shield } from 'lucide-vue-next'
+import VerumSidebar from '../components/layout/VerumSidebar.vue'
+import BentoGrid from '../components/dashboard/BentoGrid.vue'
+import LiveAuditFeed from '../components/dashboard/LiveAuditFeed.vue'
+import ProjectHealthChart from '../components/dashboard/ProjectHealthChart.vue'
+import StorageVault from '../components/dashboard/StorageVault.vue'
+
+// Upload action handler
+const handleUpload = () => {
+    console.log('Initiating Secure Upload...')
+}
+</script>
+
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <nav class="bg-white shadow">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold text-gray-800">
-          BIM Audit Hub 
-          <span v-if="store.isAdmin" class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded ml-2">ADMIN MODE</span>
-        </h1>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-gray-500">{{ store.userEmail }}</span>
-          <button @click="handleLogout" class="text-sm text-red-600 hover:text-red-800 font-medium">Salir</button>
+  <div class="flex h-screen w-full bg-verum-navy overflow-hidden font-sans selection:bg-verum-gold/30 selection:text-white">
+    <VerumSidebar />
+    
+    <main class="flex-1 h-full overflow-hidden relative flex flex-col">
+      <!-- Background Ambience -->
+      <div class="absolute inset-0 bg-gradient-to-br from-verum-navy via-verum-navy to-slate-900 pointer-events-none z-0"></div>
+      <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-verum-gold/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+      <!-- Header -->
+      <header class="relative z-10 w-full p-6 flex items-center justify-between border-b border-verum-slate/30 bg-verum-navy/50 backdrop-blur-md">
+        <div>
+          <h1 class="font-serif text-3xl font-bold text-white tracking-tight">Dashboard</h1>
+          <p class="text-slate-400 text-sm mt-1">System Status: <span class="text-emerald-400 font-mono">ONLINE</span></p>
         </div>
-      </div>
-    </nav>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-700">Proyectos</h2>
-        <div class="flex gap-2">
-           <button 
-            @click="handleSecurityTest"
-            class="bg-purple-600 text-white px-4 py-2 rounded shadow hover:bg-purple-700 transition flex items-center gap-2"
-            :disabled="testLoading"
-          >
-            <span v-if="testLoading">Testing...</span>
-            <span v-else>🛡️ Test Seguridad</span>
-          </button>
-          <router-link 
-            to="/new-project" 
-            class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition flex items-center gap-2"
-          >
-            + Nuevo Proyecto
-          </router-link>
-        </div>
-      </div>
+        <button 
+          @click="handleUpload"
+          class="group relative px-6 py-3 bg-verum-gold/10 hover:bg-verum-gold/20 text-verum-gold border border-verum-gold/50 rounded-lg flex items-center gap-3 transition-all duration-300 shadow-[0_0_20px_rgba(197,160,89,0.1)] hover:shadow-[0_0_30px_rgba(197,160,89,0.3)] overflow-hidden"
+        >
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+          <Shield class="w-5 h-5" />
+          <span class="font-medium tracking-wide">SECURE UPLOAD</span>
+        </button>
+      </header>
 
-      <div v-if="store.loading" class="text-center py-10 text-gray-500">
-        Cargando proyectos...
-      </div>
-
-      <div v-else class="bg-white shadow overflow-hidden sm:rounded-lg">
-        <ul role="list" class="divide-y divide-gray-200">
+      <!-- Content Area -->
+      <div class="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
+        <BentoGrid>
+          <!-- Row 1 -->
+          <LiveAuditFeed />
+          <ProjectHealthChart />
+          <StorageVault />
           
-          <li v-for="project in store.projects" :key="project.id" class="p-6 hover:bg-gray-50 transition">
-            <div class="flex items-center justify-between">
-              
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-3">
-                  <p class="text-lg font-medium text-blue-600 truncate">{{ project.name }}</p>
-                  <span 
-                    class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                    :class="{
-                      'bg-yellow-100 text-yellow-800': project.status === 'Pendiente',
-                      'bg-blue-100 text-blue-800': project.status === 'En Revisión',
-                      'bg-green-100 text-green-800': project.status === 'Completado'
-                    }"
-                  >
-                    {{ project.status }}
-                  </span>
-                </div>
-                <p class="text-sm text-gray-500 mt-1">{{ project.description }}</p>
-                <div class="mt-2 text-xs text-gray-400">
-                  Enviado: {{ new Date(project.created_at).toLocaleDateString() }}
-                  <span v-if="store.isAdmin"> | Usuario: {{ project.profiles?.email }}</span>
-                </div>
-              </div>
-
-              <div class="flex flex-col items-end gap-2 ml-4">
-                
-                <a :href="project.model_url" target="_blank" class="text-sm text-gray-600 hover:text-blue-600 underline decoration-dotted">
-                  📂 Ver Modelo (Drive/Box)
-                </a>
-
-                <a v-if="project.report_url" :href="project.report_url" target="_blank" class="text-sm font-bold text-green-600 hover:text-green-800 flex items-center gap-1">
-                  📥 Descargar Reporte PDF
-                </a>
-                <span v-else class="text-xs text-gray-400 italic">Reporte no disponible</span>
-
-                <!-- Admin Actions -->
-                <div v-if="store.isAdmin" class="mt-2 pt-2 border-t border-gray-100 flex gap-2 items-center">
-                  <select 
-                    @change="store.updateProjectStatus(project.id, $event.target.value)" 
-                    class="text-xs border rounded p-1 bg-gray-50"
-                    :value="project.status"
-                  >
-                    <option value="Pendiente">Pendiente</option>
-                    <option value="En Revisión">En Revisión</option>
-                    <option value="Completado">Completado</option>
-                  </select>
-                  
-                  <!-- New File Uploader Component -->
-                  <FileUploader :project="project" />
-                </div>
-
-              </div>
-            </div>
-          </li>
-        </ul>
+          <!-- Row 2 Placeholder (Activity or Map) -->
+          <div class="col-span-1 md:col-span-3 lg:col-span-1 min-h-[180px] rounded-xl border-2 border-dashed border-verum-slate/30 flex items-center justify-center group cursor-pointer hover:border-verum-gold/30 transition-colors">
+             <div class="text-center">
+                <span class="text-slate-500 text-sm group-hover:text-verum-gold transition-colors">+ Add Widget</span>
+             </div>
+          </div>
+        </BentoGrid>
       </div>
-
     </main>
   </div>
 </template>
 
-<script setup>
-import { onMounted, ref } from 'vue'
-import { useProjectStore } from '../stores/projectStore'
-import { supabase } from '../supabaseClient'
-import { useRouter } from 'vue-router'
-import FileUploader from '../components/FileUploader.vue'
-
-const store = useProjectStore()
-const router = useRouter()
-const testLoading = ref(false)
-
-onMounted(() => {
-  store.fetchProjects()
-})
-
-const handleLogout = async () => {
-  await supabase.auth.signOut()
-  router.push('/')
+<style scoped>
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(30, 41, 59, 0.5) transparent;
 }
-
-const handleSecurityTest = async () => {
-  if (!confirm("Esto creará un proyecto de prueba y verificará los logs de auditoría. ¿Continuar?")) return;
-  
-  testLoading.value = true;
-  try {
-    const result = await store.testSecurity();
-    if (result.success) {
-      alert(`✅ ÉXITO: Log de Auditoría Encontrado.\n\nID Proyecto: ${result.project.id}\nAcción: ${result.log.action}\nTabla: ${result.log.target_table}\nUser: ${result.log.user_id}`);
-    } else {
-      alert(`❌ FALLO: ${result.message}`);
-    }
-  } catch (e) {
-    alert(`❌ ERROR CRÍTICO: ${e.message}`);
-  } finally {
-    testLoading.value = false;
-  }
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
 }
-</script>
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(30, 41, 59, 0.5);
+  border-radius: 20px;
+}
+</style>
